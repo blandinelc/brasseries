@@ -116,11 +116,11 @@ etab_allok <- etab_all %>%
          NOM_REGION = nom) %>% #modifier les noms
   select(-nom, - new_code) #supprimer les colonnes inutiles après le chgt de nom
 
-#Correspondance des noms de région
+#Correspondance des noms de nouvelles région
 noms_regions <- tribble(
   ~code, ~nom,
   "84", "Auvergne-Rhône-Alpes",
-  "72", "Bourgogne-Franche-Comté",
+  "27", "Bourgogne-Franche-Comté",
   "53", "Bretagne",
   "24", "Centre-Val de Loire",
   "94", "Corse",
@@ -143,12 +143,17 @@ etab_allok_nom <- etab_allok %>%
   left_join(noms_regions, by = (c("REGION_OK" = "code")))
 
 etab_allok <- etab_allok_nom %>%
-  select(NOM_REGION = nom, -nom)
+  select(everything(), -NOM_REG) %>%
+  mutate(NOM_REGION = nom) %>%
+  select(-nom)
 
-#Exporter
+#Exporter csv
 fwrite(etab_allok, file = "etablissements20142018.csv", sep = ";", col.names = TRUE)
+#Exporter fst
 write.fst(etab_allok, "etab20142018.fst")
+#etab_allok <- read.fst("etab20142018.fst")
 
+  #### Evolution brasseries ####
 
 #Filtrer les brasseries
 brasseries <- etab_allok %>% 
@@ -163,10 +168,9 @@ fwrite(brasseries_bzh, file = "brasseries_bzh.csv", sep = ";", col.names = TRUE)
 
 #Exporter certaines variables
 save(brasseries, file = "brasseries_solo.RDATA")
-  #ou
+#ou
 write.fst(brasseries, "brasseries20142018.fst")
 
-  #### Evolution brasseries ####
 
 #Par année
 brasseries_annee  <-  brasseries %>%
@@ -210,7 +214,18 @@ brasseries_region <- brasseries %>%
 
 ggplot(brasseries_region, aes(ANNEE, NOMBRE_REG, fill = "#E30613", label = NOMBRE_REG)) +
   geom_col() +
-  facet_wrap(~REGION_OK)
+  facet_wrap(~NOM_REGION) +
+  labs(title = "Le nombre de brasseries par région entre 2013 et 2018",
+       x = element_blank(), 
+       y = element_blank()) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.border =  element_blank(),
+        legend.position="none") +
+  scale_x_discrete(breaks = c("2013", "2017"))
+ggsave(file = "brasseries_evol_region.png")
 
 brasseries_region2 <- brasseries_region %>%
   pivot_wider(id_cols = REGION_OK, values_from = NOMBRE_REG, names_from = ANNEE)
