@@ -6,7 +6,7 @@ library(fst)
 setwd("~/DATA/brasseries")
 
   #### Importer les données et les grouper ####
-dbf <- list.files(pattern = "\\.dbf") %>%
+dbf <- list.files(path = "./dbf_stock_ok", pattern = "\\.dbf", full.names = TRUE) %>%
   setNames(., sub("\\.dbf$", "", basename(.)))
 tous <- lapply(dbf, read.dbf)
 
@@ -24,24 +24,25 @@ etab_correc <- etab %>%
 
   #Deuxième filtre : corriger les champs manquants avec les structures différentes
 etab2_ <- etab_correc %>%
-  mutate(REGION = case_when(is.na(REGION) == TRUE ~ reg,
-                            is.na(REGION) == FALSE ~ REGION),
-         DEP = case_when(is.na(DEP) == TRUE ~ dep,
-                         is.na(DEP) == FALSE ~ DEP),
-         COM = case_when(is.na(COM) == TRUE ~ com,
-                         is.na(COM) == FALSE ~ COM),
-         APE = case_when(is.na(APE) == TRUE ~ ape,
-                         is.na(APE) == FALSE ~ APE),
-         TAILLE = case_when(is.na(TAILLE) == TRUE ~ taille,
-                            is.na(TAILLE) == FALSE ~ TAILLE),
-         FREQ = case_when(is.na(FREQ) == TRUE ~ freq,
-                          is.na(FREQ) == FALSE ~ as.integer(FREQ)),
-         ARTISAN = case_when(is.na(ARTISAN) == TRUE ~ artisan,
-                             is.na(ARTISAN) == FALSE ~ ARTISAN))
+  mutate(REGION = case_when(is.na(REGION) == FALSE ~ REGION,
+                            is.na(REGION) == TRUE ~ reg),
+         DEP = case_when(is.na(DEP) == FALSE ~ DEP,
+                         is.na(DEP) == TRUE ~ dep),
+         COM = case_when(is.na(COM) == FALSE ~ COM,
+                         is.na(COM) == TRUE ~ com),
+         APE = case_when(is.na(APE) == FALSE ~ APE,
+                         is.na(APE) == TRUE ~ ape),
+         TAILLE = case_when(is.na(TAILLE) == FALSE ~ TAILLE,
+                            is.na(TAILLE) == TRUE ~ taille),
+         FREQ = case_when(is.na(FREQ) == FALSE ~ as.integer(FREQ),
+                          is.na(FREQ) == TRUE ~ freq),
+         ARTISAN = case_when(is.na(ARTISAN) == FALSE ~ ARTISAN,
+                             is.na(ARTISAN) == TRUE ~ artisan))
 
 #Vérifier qu'il n'y a plus de champ REGION vide
 etabtest <- etab2_ %>%
   filter(is.na(REGION) == TRUE)
+rm(etabtest)
 
 #Sélectionner les bonnes colonnes avec les bons noms
 etab1 <- etab1 %>%
@@ -56,33 +57,35 @@ nrow(etab1) + nrow(etab2)
 etab_12 <- bind_rows(etab1, etab2)
 
 #Corriger le problème de type de colonnes pour bind_rows()
-etab_12 <- etab_12 %>%
+etab_all <- etab_12 %>%
   mutate(DEP = as.character(DEP),
          TAILLE = as.character(TAILLE),
          ARTISAN = as.character(ARTISAN))
 
-  #Importer le csv isolé
-dbf2018 <- fread("ets_2018.csv")
-# dbf2018 %>%
-#   select(REGION = REG, everything())
-names(dbf2018)[names(dbf2018) == "REG"] <- "REGION"
-
-#Créer une colonne id correspondant à celui de l'autre fichier groupé
-dbf2018$fichier <- "ets2018"
-
-#Placer la colonne ID au début pour + de clarté
-dbf2018 <- dbf2018[, c(17, 1:16)]
-
-#Nettoyer le csv isolé
-dbf2018 <- dbf2018 %>%
-  select(fichier, REGION, DEP, COM, APE, TAILLE, ARTISAN, FREQ) %>%
-  mutate(REGION = as.character(REGION), 
-         TAILLE = as.character(TAILLE),
-         TAILLE = str_pad(TAILLE, width = 2, pad = 0))
-
-#Grouper l'ensemble dbf/csv
-etab_all <- bind_rows(etab_12, dbf2018) %>% 
-  arrange(fichier)
+#### Ancienne manip ####
+# 
+#   #Importer le csv isolé
+# dbf2018 <- fread("ets_2018.csv")
+# # dbf2018 %>%
+# #   select(REGION = REG, everything())
+# names(dbf2018)[names(dbf2018) == "REG"] <- "REGION"
+# 
+# #Créer une colonne id correspondant à celui de l'autre fichier groupé
+# dbf2018$fichier <- "ets2018"
+# 
+# #Placer la colonne ID au début pour + de clarté
+# dbf2018 <- dbf2018[, c(17, 1:16)]
+# 
+# #Nettoyer le csv isolé
+# dbf2018 <- dbf2018 %>%
+#   select(fichier, REGION, DEP, COM, APE, TAILLE, ARTISAN, FREQ) %>%
+#   mutate(REGION = as.character(REGION), 
+#          TAILLE = as.character(TAILLE),
+#          TAILLE = str_pad(TAILLE, width = 2, pad = 0))
+# 
+# #Grouper l'ensemble dbf/csv
+# etab_all <- bind_rows(etab_12, dbf2018) %>% 
+#   arrange(fichier)
 
   #### Formater pour l'analyse ####
 
@@ -91,29 +94,66 @@ etab_all <- etab_all %>%
   mutate(DEP = str_pad(DEP, width = 2, pad = 0),
          REGION = str_pad(REGION, width = 2, pad = 0),
          COM = str_pad(COM, width = 5, pad = 0),
-         ANNEE = substring(fichier, 4))
+         ANNEE = substring(fichier, 11),
+         TAILLE = str_pad(TAILLE, width = 2, pad = 0))
 
 
 #Attention, les régions ont changé en 2015. Donc il faut une correspondance
-corres_region <- fread("anciennes-nouvelles-regions.csv", encoding = "UTF-8")
-corres_region <- corres_region %>%
+corres_region <- fread("anciennes-nouvelles-regions.csv", encoding = "UTF-8") %>%
   select(ancien_code = `Anciens Code`, new_code = `Nouveau Code`, nom = `Nouveau Nom`) %>%
-  mutate(ancien_code = str_pad(ancien_code, width = 2, pad = 0))
-etab_all <- etab_all %>%
-  left_join(corres_region, by = c("REGION" = "ancien_code"))
+  mutate(ancien_code = str_pad(ancien_code, width = 2, pad = 0),
+         new_code = str_pad(new_code, width = 2, pad = 0)) %>%
+  distinct() %>%
+  arrange(ancien_code)
 
-etab_all_reg <- etab_all %>%
-  mutate(new_code = case_when(is.na(new_code) == FALSE ~ str_pad(new_code, width = 2, pad = 0),
-                              is.na(new_code) == TRUE ~ REGION))
+etab_allok <- etab_all %>%
+  #associer les anciens codes région aux nouveaux d'après la col "ancien_code"
+  left_join(corres_region, by = c("REGION" = "ancien_code")) %>%
+  #répercuter les codes inchangés dans la colonne "new_code"
+  mutate(new_code = case_when(is.na(new_code) == FALSE ~ new_code,
+                              is.na(new_code) == TRUE ~ REGION),
+         REGION_OK = new_code,
+         NOM_REGION = nom) %>% #modifier les noms
+  select(-nom, - new_code) #supprimer les colonnes inutiles après le chgt de nom
 
-etab_allok <- etab_all_reg %>%
-  mutate(REGION_OK = new_code,
-         NOM_REGION = nom) %>%
-  select(-new_code)
+#Correspondance des noms de nouvelles région
+noms_regions <- tribble(
+  ~code, ~nom,
+  "84", "Auvergne-Rhône-Alpes",
+  "27", "Bourgogne-Franche-Comté",
+  "53", "Bretagne",
+  "24", "Centre-Val de Loire",
+  "94", "Corse",
+  "44", "Grand Est",
+  "01", "Guadeloupe",
+  "03", "Guyane",
+  "32", "Hauts-de-France",
+  "11", "Ile-de-France",
+  "04", "La Réunion",
+  "02", "Martinique",
+  "06", "Mayotte",
+  "28", "Normandie",
+  "75", "Nouvelle-Aquitaine",
+  "76", "Occitanie",
+  "52", "Pays de la Loire",
+  "93", "Provence-Alpes-Côte d'Azur"
+)
 
-#Exporter
-fwrite(etab_allok, file = "etablissements20132018.csv", sep = ";", col.names = TRUE)
+etab_allok_nom <- etab_allok %>%
+  left_join(noms_regions, by = (c("REGION_OK" = "code")))
 
+etab_allok <- etab_allok_nom %>%
+  select(everything(), -NOM_REG) %>%
+  mutate(NOM_REGION = nom) %>%
+  select(-nom)
+
+#### Export fichier général ####
+
+#Exporter csv
+fwrite(etab_allok, file = "etablissements20142018.csv", sep = ";", col.names = TRUE)
+#Exporter fst
+write.fst(etab_allok, "etab20142018.fst")
+#etab_allok <- read.fst("etab20142018.fst")
 
 #Filtrer les brasseries
 brasseries <- etab_allok %>% 
@@ -123,12 +163,13 @@ brasseries_bzh <- brasseries %>%
   filter(REGION_OK == "53")
 
 #Exporter les brasseries
-fwrite(brasseries, file = "brasseries_20132018.csv", sep = ";", col.names = TRUE)
+fwrite(brasseries, file = "brasseries_20142018.csv", sep = ";", col.names = TRUE)
 fwrite(brasseries_bzh, file = "brasseries_bzh.csv", sep = ";", col.names = TRUE)
 
 #Exporter certaines variables
 save(brasseries, file = "brasseries_solo.RDATA")
-  #ou
+#ou
+write.fst(brasseries, "brasseries20142018.fst")
 
 
   #### Evolution brasseries ####
@@ -167,28 +208,41 @@ ggplot(brasseries_annee_bzh, aes(ANNEE, NOMBRE, fill = "#E30613", label = NOMBRE
         panel.border =  element_blank())
 ggsave(file = "brasseries_bretagne_annee.png")
 
-#Graph ensemble
+
+#Graph par région
 
 brasseries_region <- brasseries %>%
-  group_by(ANNEE, REGION_OK) %>%
+  group_by(ANNEE, REGION_OK, NOM_REGION) %>%
   summarize(NOMBRE_REG = sum(FREQ))
+
+ggplot(brasseries_region, aes(ANNEE, NOMBRE_REG, fill = "#E30613", label = NOMBRE_REG)) +
+  geom_col() +
+  facet_wrap(~NOM_REGION) +
+  labs(title = "Le nombre de brasseries par région entre 2013 et 2018",
+       x = element_blank(), 
+       y = element_blank()) +
+  theme_light() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.border =  element_blank(),
+        legend.position="none") +
+  scale_x_discrete(breaks = c("2013", "2017"))
+ggsave(file = "brasseries_evol_region.png")
+
 
 brasseries_region2 <- brasseries_region %>%
   pivot_wider(id_cols = REGION_OK, values_from = NOMBRE_REG, names_from = ANNEE)
-
 fwrite(brasseries_region2, file = "brasseries_region_annee.csv", sep = ";", row.names = F)
-  
-ggplot(brasseries_region, aes(ANNEE, NOMBRE_REG, fill = "#E30613", label = "NOMBRE")) +
-  geom_line()
 
-#Par région
+#Par région en 2018
 brasseries_region_2018 <- brasseries %>%
-  filter(ANNEE == "2018") %>%
-  group_by(REGION) %>%
+  filter(ANNEE == "2017") %>%
+  group_by(REGION_OK, NOM_REGION) %>%
   summarize(NOMBRE = sum(FREQ)) %>%
-  arrange(REGION)
+  arrange(REGION_OK)
   
-ggplot(brasseries_region, aes(REGION, NOMBRE, label = NOMBRE)) +
+ggplot(brasseries_region_2018, aes(NOM_REGION, NOMBRE, label = NOMBRE)) +
   geom_col() +
   geom_text(size = 3, hjust = "left", nudge_y = 2) +
   coord_flip() +
