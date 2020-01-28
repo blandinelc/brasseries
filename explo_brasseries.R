@@ -62,31 +62,6 @@ etab_all <- etab_12 %>%
          TAILLE = as.character(TAILLE),
          ARTISAN = as.character(ARTISAN))
 
-#### Ancienne manip ####
-# 
-#   #Importer le csv isolé
-# dbf2018 <- fread("ets_2018.csv")
-# # dbf2018 %>%
-# #   select(REGION = REG, everything())
-# names(dbf2018)[names(dbf2018) == "REG"] <- "REGION"
-# 
-# #Créer une colonne id correspondant à celui de l'autre fichier groupé
-# dbf2018$fichier <- "ets2018"
-# 
-# #Placer la colonne ID au début pour + de clarté
-# dbf2018 <- dbf2018[, c(17, 1:16)]
-# 
-# #Nettoyer le csv isolé
-# dbf2018 <- dbf2018 %>%
-#   select(fichier, REGION, DEP, COM, APE, TAILLE, ARTISAN, FREQ) %>%
-#   mutate(REGION = as.character(REGION), 
-#          TAILLE = as.character(TAILLE),
-#          TAILLE = str_pad(TAILLE, width = 2, pad = 0))
-# 
-# #Grouper l'ensemble dbf/csv
-# etab_all <- bind_rows(etab_12, dbf2018) %>% 
-#   arrange(fichier)
-
   #### Formater pour l'analyse ####
 
 #Formater les numéros de département et région
@@ -147,13 +122,13 @@ etab_allok <- etab_allok_nom %>%
   mutate(NOM_REGION = nom) %>%
   select(-nom)
 
+  #### Export fichier général ####
+
 #Exporter csv
 fwrite(etab_allok, file = "etablissements20142018.csv", sep = ";", col.names = TRUE)
 #Exporter fst
 write.fst(etab_allok, "etab20142018.fst")
 #etab_allok <- read.fst("etab20142018.fst")
-
-  #### Evolution brasseries ####
 
 #Filtrer les brasseries
 brasseries <- etab_allok %>% 
@@ -170,7 +145,10 @@ fwrite(brasseries_bzh, file = "brasseries_bzh.csv", sep = ";", col.names = TRUE)
 save(brasseries, file = "brasseries_solo.RDATA")
 #ou
 write.fst(brasseries, "brasseries20142018.fst")
+#brasseries <- read.fst("brasseries20142018.fst")
 
+
+  #### Evolution France ####
 
 #Par année
 brasseries_annee  <-  brasseries %>%
@@ -189,6 +167,8 @@ ggplot(brasseries_annee, aes(ANNEE, NOMBRE, fill = "#E30613", label = NOMBRE)) +
         panel.border =  element_blank())
 ggsave(file = "brasseries_france_annee.png")
 
+  #### Evolution régions ####
+
 #Graph Bretagne
 brasseries_annee_bzh  <-  brasseries %>%
   filter(REGION_OK == "53") %>%
@@ -206,7 +186,8 @@ ggplot(brasseries_annee_bzh, aes(ANNEE, NOMBRE, fill = "#E30613", label = NOMBRE
         panel.border =  element_blank())
 ggsave(file = "brasseries_bretagne_annee.png")
 
-#Graph ensemble
+
+#Graph par région
 
 brasseries_region <- brasseries %>%
   group_by(ANNEE, REGION_OK, NOM_REGION) %>%
@@ -227,22 +208,21 @@ ggplot(brasseries_region, aes(ANNEE, NOMBRE_REG, fill = "#E30613", label = NOMBR
   scale_x_discrete(breaks = c("2013", "2017"))
 ggsave(file = "brasseries_evol_region.png")
 
+
 brasseries_region2 <- brasseries_region %>%
   pivot_wider(id_cols = REGION_OK, values_from = NOMBRE_REG, names_from = ANNEE)
-
 fwrite(brasseries_region2, file = "brasseries_region_annee.csv", sep = ";", row.names = F)
-  
-ggplot(brasseries_region, aes(ANNEE, NOMBRE_REG, fill = "#E30613", label = "NOMBRE")) +
-  geom_line()
 
-#Par région
+  #### Répartition par région ####
+
+#Par région en 2018
 brasseries_region_2018 <- brasseries %>%
-  filter(ANNEE == "2018") %>%
-  group_by(REGION) %>%
+  filter(ANNEE == "2017") %>%
+  group_by(REGION_OK, NOM_REGION) %>%
   summarize(NOMBRE = sum(FREQ)) %>%
-  arrange(REGION)
+  arrange(REGION_OK)
   
-ggplot(brasseries_region, aes(REGION, NOMBRE, label = NOMBRE)) +
+ggplot(brasseries_region_2018, aes(NOM_REGION, NOMBRE, label = NOMBRE)) +
   geom_col() +
   geom_text(size = 3, hjust = "left", nudge_y = 2) +
   coord_flip() +
@@ -254,28 +234,41 @@ ggplot(brasseries_region, aes(REGION, NOMBRE, label = NOMBRE)) +
         panel.border =  element_blank())
 ggsave(file = "brasseries_par_région_2018.png")
 
+#Connaître le nombre de villes comptant une brasserie
+brasseries_region_2018_villes <- brasseries %>%
+  filter(ANNEE == "2017") %>%
+  group_by(REGION_OK, NOM_REGION) %>%
+  summarize(NB_VILLES = n()) %>%
+  arrange(desc(NB_VILLES))
+
+#A comparer avec le nombre de villes par région
+
 #Par dep
 brasseries_dep_2018 <- brasseries %>%
-  filter(ANNEE == "2018") %>%
+  filter(ANNEE == "2017") %>%
   group_by(DEP) %>%
   summarise(NOMBRE = sum(FREQ)) %>%
   arrange(desc(NOMBRE), .by_group = TRUE)
 
+brasseries_villes_par_dep_2018 <- brasseries %>%
+  filter(ANNEE == "2017") %>%
+  group_by(DEP) %>%
+  summarise(NB_VILLES = n()) %>%
+  arrange(desc(NB_VILLES))
+fwrite(brasseries_villes_par_dep_2018, file = "brasseries_villespardep_2018.csv")
+
 brasseries_dep_2018_bzh <- brasseries %>%
-  filter(ANNEE == "2018" & REGION == "53") %>%
+  filter(ANNEE == "2017" & REGION == "53") %>%
   group_by(DEP) %>%
   summarise(NOMBRE = sum(FREQ)) %>%
   arrange(desc(NOMBRE), .by_group = TRUE)
 
 #Par commune
 brasseries_communes_2018 <- brasseries %>%
-  filter(ANNEE == "2018") %>%
+  filter(ANNEE == "2017") %>%
   group_by(COM) %>%
   summarise(NOMBRE = sum(FREQ)) %>%
   arrange(desc(NOMBRE), .by_group = TRUE)
-
-#Comparer avec nombre d'habitants
-#Nombre de villes par département (plutôt que de nombre de brasseries brut)
 
   #### Selon la taille de l'effectif ####
 nomenclature_salaries <- tribble(
@@ -336,3 +329,45 @@ ggplot(taille_bzh_20132018, aes(EFFECTIF, NOMBRE)) +
 ggsave(file = "BrasseriesBZHTaille_20132018.png")
 
 
+
+
+  #### Selon la population ####
+
+#Comparer avec nombre d'habitants
+#Nombre de villes par département (plutôt que de nombre de brasseries brut)
+
+popregion <- tribble(
+  ~code_reg, ~nom_reg, ~pop_reg_2020,
+  "84",	"Auvergne-Rhône-Alpes",	7948287,
+  "27",	"Bourgogne-Franche-Comté",	2811423,
+  "53",	"Bretagne",	3318904,
+  "24",	"Centre-Val de Loire",	2576252,
+  "94",	"Corse",	334938,
+  "44",	"Grand Est",	5549586,
+  "01",	"Guadeloupe",	390253,
+  "03",	"Guyane",	268700,
+  "32",	"Hauts-de-France",	6003815,
+  "11",	"Île-de-France",	12174880,
+  "04",	"La Réunion",	853659,
+  "02",	"Martinique",	372594,
+  "28",	"Normandie",	3330478,
+  "75",	"Nouvelle-Aquitaine",	5956978,
+  "76",	"Occitanie",	5845102,
+  "52",	"Pays de la Loire",	3757600,
+  "93",	"Provence-Alpes-Côte d'Azur",	5030890
+)
+
+brasseries_pop <- brasseries_region_2018 %>%
+  left_join(popregion, by = c("REGION_OK" = "code_reg")) %>%
+  mutate(brasseries_100000hab = round(NOMBRE / pop_reg_2020 * 100000, digits = 2)) %>%
+  arrange(desc(brasseries_100000hab))
+fwrite(brasseries_pop, file = "brasseries_reg_pop_2018.csv")
+
+
+  #### En Bretagne ####
+
+brasseries_bzh_2018 <- brasseries %>%
+  filter(ANNEE == "2017", REGION_OK == "53") %>%
+  group_by(COM) %>%
+  summarize(NB = sum(FREQ)) %>%
+  arrange(desc(NB))
